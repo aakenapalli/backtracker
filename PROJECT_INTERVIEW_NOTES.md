@@ -5,7 +5,7 @@ This file is a living record of product decisions, architectural choices, and im
 ## Current State (as of 2026-08-13)
 
 - **Backend**: Node/TypeScript, raw `node:http` (no framework). An 8-stage deterministic planner pipeline (`backend/src/planner/`). Postgres persistence via the raw `pg` driver and hand-written SQL migrations — no ORM.
-- **Frontend**: React/TypeScript, map-dominant UI built on `react-leaflet` with real OpenStreetMap/CARTO tiles. Talks to the real API — no mock data path in the running app.
+- **Frontend**: React/TypeScript, map-dominant UI built on `react-leaflet` with real OpenStreetMap/CARTO tiles. A 7-step preferences wizard collects real user input before generating an itinerary — no hardcoded defaults, no mock data path in the running app.
 - **Data**: 27 Istanbul sites, 6 themes, 24 site relationships — hand-curated content, enriched with real sourced facts and interest/trend/social signals from Wikidata, Wikipedia, and Stack Exchange (`backend/src/ingest/`), combined in a scoring formula that keeps editorial judgment dominant over raw popularity.
 - **Tests**: 64 tests via Node's built-in `node:test` — pure unit tests against in-memory fixtures plus integration tests against the real seeded database.
 - **Live**: deployed publicly (Cloud Run + Firebase Hosting + Neon) — see README's "Live" section for URLs.
@@ -392,6 +392,14 @@ Two more Opus research/planning passes preceded implementation: one that called 
 - Facts-only over shipping Wikipedia's prose — licensing awareness (CC0 vs. CC BY-SA) reads as maturity beyond coding ability.
 - Two typed tables over a generic EAV signals table — EAV is a well-known anti-pattern; "why would you do that" is as likely a reaction as being impressed.
 - **Flipped**: added Turkish Wikipedia pageviews to v1 rather than deferring to v2, specifically because the added cost was trivial (one more API call per site) and "I identified and corrected for English-language bias in interest data" is a distinctive, thematically-consistent story worth the small extra scope.
+
+### 2026-08-13 (continued) — Preferences wizard: completing the customer journey
+
+- Found a real, significant gap while planning what to build next for stronger resume bullets: the deployed app had no way for a visitor to actually plan their own trip. `usePlannerData` auto-generated an itinerary from a hardcoded `defaultPreferences` object on page load, and the sidebar's "Adjust preferences" button had no click handler at all. Every visitor — including anyone clicking the resume link — saw the identical fixed itinerary, with zero interactivity on the one thing the product claims to do. Reprioritized this above every other candidate next step (multiple itinerary options, API rate limiting, finishing CI/CD) once it was found, since a feature enhancement on top of a broken core loop matters less than the core loop not existing.
+- Built a 7-step wizard (one question per screen — days, hours/day, walking tolerance, budget sensitivity, familiarity, themes, must-see sites) instead of a single all-at-once form. The user's explicit reasoning for wanting steps over a form: today's 6 inputs don't need pacing, but more parameters are likely later, and a wizard absorbs that without restructuring. Built as a config-driven array of step definitions (`wizardSteps.tsx`) for exactly that reason — adding a future parameter is one array entry, not new page logic.
+- The must-see step finally exercises `fetchSites()` (`GET /api/sites`), which was previously written but imported nowhere — dead code since the Postgres migration. Sites are grouped by real neighborhood rather than a flat list of 27.
+- "Adjust preferences" now actually works, and specifically re-opens the wizard **pre-filled** with the previous answers rather than resetting to blank — the difference between "start over" and "let me tweak one thing," which matters for a tool someone might iterate on.
+- Verified with a scripted browser pass rather than just visual inspection: confirmed the wizard (not an itinerary) is what a fresh visitor actually sees, that step validation genuinely blocks progression (Next stays disabled until the current step has an answer), that the must-see step's site chips are real fetched data (27 of them) not a mock list, and that the generated itinerary's content changes to match whatever was actually submitted in the wizard — not the old fixed defaults.
 
 ### Why This Order
 

@@ -10,12 +10,12 @@ Travel-first web app for Istanbul that generates geographically efficient, histo
 
 ## How it works
 
-1. The frontend sends the user's trip preferences to `POST /api/itinerary/generate`.
+1. A 7-step preferences wizard (`frontend/src/components/wizard/`) asks the user one question per screen — trip length, pace, budget, familiarity, themes, and must-see sites (the last pulled from the real seeded site list via `GET /api/sites`) — then sends the answers to `POST /api/itinerary/generate`.
 2. `ItineraryController` → `ItineraryService` → `SiteRepository.getAllSites()` loads all Istanbul sites (and their themes/relationships) from Postgres.
 3. The preferences and sites are run through the planner pipeline (`backend/src/planner/`), in order:
    `candidate-filter` → `site-scorer` → `anchor-selector` → `site-clusterer` → `day-allocator` → `route-optimizer` → `optional-stop-selector` → `itinerary-explainer`.
    Each stage is a small, independently testable module — see `backend/src/planner/*.test.ts` for what each one is responsible for, and `PROJECT_INTERVIEW_NOTES.md` for why the pipeline is shaped this way.
-4. The result is a day-by-day itinerary (JSON) with ordered stops, travel times, and a reason each stop was included. The frontend renders it as a side-panel timeline plus a real map (`react-leaflet`) with day-colored routes.
+4. The result is a day-by-day itinerary (JSON) with ordered stops, travel times, and a reason each stop was included. The frontend renders it as a side-panel timeline plus a real map (`react-leaflet`) with day-colored routes. "Adjust preferences" reopens the wizard pre-filled with the current answers.
 
 This whole path is deterministic — the same preferences always produce the same itinerary, no LLM in the loop.
 
