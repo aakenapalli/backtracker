@@ -5,9 +5,10 @@ import { Icon, type IconName } from "../ui/Icon";
 
 interface PreferencesFormProps {
   preferences: PlannerPreferences;
+  onAdjustPreferences: () => void;
 }
 
-export function PreferencesForm({ preferences }: PreferencesFormProps) {
+export function PreferencesForm({ preferences, onAdjustPreferences }: PreferencesFormProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -46,7 +47,9 @@ export function PreferencesForm({ preferences }: PreferencesFormProps) {
             ))}
           </div>
 
-          <button className="secondary-button">Adjust preferences</button>
+          <button className="secondary-button" onClick={onAdjustPreferences}>
+            Adjust preferences
+          </button>
         </div>
       ) : null}
     </section>

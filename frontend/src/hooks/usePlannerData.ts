@@ -1,57 +1,66 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { generateItinerary } from "../api/plannerApi";
-import { defaultPreferences } from "../data/mockItinerary";
 import type { GeneratedItineraryView, PlannerPreferences } from "../types/planner";
 
 interface PlannerDataState {
-  preferences: PlannerPreferences;
+  preferences: PlannerPreferences | null;
   itinerary: GeneratedItineraryView | null;
   isLoading: boolean;
   errorMessage: string | null;
+  generate: (preferences: PlannerPreferences) => void;
+  resetItinerary: () => void;
 }
 
 export function usePlannerData(): PlannerDataState {
+  const [preferences, setPreferences] = useState<PlannerPreferences | null>(null);
   const [itinerary, setItinerary] = useState<GeneratedItineraryView | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
+    return () => abortControllerRef.current?.abort();
+  }, []);
 
-    async function loadItinerary() {
-      try {
-        setIsLoading(true);
-        setErrorMessage(null);
-        const response = await generateItinerary(
-          { preferences: defaultPreferences },
-          controller.signal,
-        );
-        setItinerary(response.itinerary);
-      } catch (error) {
+  function generate(nextPreferences: PlannerPreferences) {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setPreferences(nextPreferences);
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    generateItinerary({ preferences: nextPreferences }, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setItinerary(response.itinerary);
+        }
+      })
+      .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return;
         }
-
-        const message =
-          error instanceof Error ? error.message : "Unable to load planner data right now.";
-        setErrorMessage(message);
-      } finally {
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load planner data right now.");
+      })
+      .finally(() => {
         if (!controller.signal.aborted) {
           setIsLoading(false);
         }
-      }
-    }
+      });
+  }
 
-    void loadItinerary();
-
-    return () => controller.abort();
-  }, []);
+  function resetItinerary() {
+    setItinerary(null);
+    setErrorMessage(null);
+  }
 
   return {
-    preferences: defaultPreferences,
+    preferences,
     itinerary,
     isLoading,
     errorMessage,
+    generate,
+    resetItinerary,
   };
 }
-
