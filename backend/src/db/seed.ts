@@ -7,6 +7,21 @@ if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run the seed script with NODE_ENV=production.");
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+let dbHost: string;
+try {
+  dbHost = new URL(process.env.DATABASE_URL ?? "").hostname;
+} catch {
+  throw new Error("Could not parse DATABASE_URL; refusing to seed.");
+}
+
+if (!LOCAL_HOSTS.has(dbHost) && process.env.ALLOW_REMOTE_SEED !== "true") {
+  throw new Error(
+    `Refusing to seed remote database "${dbHost}". Re-run with ALLOW_REMOTE_SEED=true if this is intended.`,
+  );
+}
+
 async function seed(): Promise<void> {
   const client = await pool.connect();
 

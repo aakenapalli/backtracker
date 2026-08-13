@@ -1,6 +1,17 @@
-# History-Based Travel Planner Interview Notes
+# Backtrack — Interview Notes
 
-This file is a living record of product decisions, architectural choices, and implementation rationale for the history-based travel planner project. It is meant to help explain the project clearly in interviews and will be updated as the project evolves.
+This file is a living record of product decisions, architectural choices, and implementation rationale for Backtrack, the history-based travel planner project. It is meant to help explain the project clearly in interviews and will be updated as the project evolves.
+
+## Current State (as of 2026-08-13)
+
+- **Backend**: Node/TypeScript, raw `node:http` (no framework). An 8-stage deterministic planner pipeline (`backend/src/planner/`). Postgres persistence via the raw `pg` driver and hand-written SQL migrations — no ORM.
+- **Frontend**: React/TypeScript, map-dominant UI built on `react-leaflet` with real OpenStreetMap/CARTO tiles. Talks to the real API — no mock data path in the running app.
+- **Data**: 27 Istanbul sites, 6 themes, 25 site relationships, version-controlled as TypeScript seed files and loaded into Postgres by a seed script.
+- **Tests**: 49 tests via Node's built-in `node:test` — 41 pure unit tests against in-memory fixtures, 8 integration tests against the real seeded database.
+- **Not yet built**: public deployment; the Wikidata/Wikipedia + Reddit data-sourcing pipeline (schema already reserves `source_url`/`source_attribution` columns for it); accounts/saved trips; transit-aware routing.
+- Single initial git commit as of 2026-08-13 — the project was built before being put under version control, so there's no earlier commit history to speak of.
+
+See `README.md` for how to actually run it. The rest of this file is the "why" behind each of these — useful for going deeper in an interview than "it uses Postgres."
 
 ## Project Thesis
 
@@ -101,15 +112,18 @@ Why:
 
 ### Data Layer
 
-- Postgres
-- Structured site metadata
-- Themes and relationships stored explicitly
+- Postgres, accessed through the raw `pg` driver with hand-written SQL — no ORM or query builder
+- Four tables: `sites`, `themes`, `site_themes` (join table), `site_relationships` — `slug` is the natural primary key everywhere, not a surrogate `id`
+- A small hand-rolled, checksummed migration runner instead of a migration library
+- Seed data lives in version-controlled TypeScript files (`backend/src/seed/*.seed.ts`); a seed script truncates and reloads Postgres from them, so the TS files remain the source of truth
 
 Why:
 
 - Planner needs structured data, not freeform text
 - Relational modeling fits sites, themes, and cross-site links well
 - Supports explainable and deterministic itinerary generation
+- No ORM means every query is something hand-written and explainable, not generated — consistent with the rest of the backend's no-unnecessary-dependencies pattern (raw `node:http` server, `node:test` instead of Vitest/Jest)
+- Full rationale for the specific schema choices (`slug` vs. surrogate key, `CHECK` vs. Postgres `ENUM`, `float8` vs. `numeric`, the migration checksum design) is in the 2026-08-13 entry in the Implementation Log below — that level of detail lives there rather than being duplicated here
 
 ## Planner Philosophy
 
@@ -183,7 +197,7 @@ These fields are what allow the planner to reason about feasibility, value, and 
 
 ## Current Seed Strategy
 
-- 25 to 35 Istanbul sites
+- 27 Istanbul sites seeded (within the original 25–35 target range), across 6 themes and 25 site-to-site relationships
 - Mix of iconic anchors and more niche supporting locations
 - Include a small number of area-style entries such as Balat/Fener walking areas
 - Focus on landmarks and historically meaningful areas in v1
@@ -201,12 +215,15 @@ These fields are what allow the planner to reason about feasibility, value, and 
 
 ## Relationship Strategy
 
-Relationship types:
+Relationship types (defined in the domain model, `backend/src/types/domain.ts`):
 
 - `nearby`
-- `paired-visit`
+- `same-era`
 - `same-theme`
+- `paired-visit`
 - `contrast-over-time`
+
+The current seed data uses 4 of the 5 (no `same-era` links yet — a natural next addition when the seed set grows).
 
 Why:
 
@@ -234,12 +251,20 @@ I wanted to build something that felt like a real consumer product, not just a t
 
 - Keep the planner explainable
 - Keep the core logic deterministic
-- Build a polished map-based demo
-- Write unit tests for planner logic
+- Build a polished map-based demo — done, real `react-leaflet` map as of 2026-08-12
+- Write unit tests for planner logic — done, 49 tests as of 2026-08-13
+- Use a real database, not mock/in-memory data — done, Postgres as of 2026-08-13
 - Preserve architectural clarity over premature complexity
 - Keep a clear story for tradeoffs and why each subsystem exists
 
 ## Planned Post-MVP Extensions
+
+Near-term, already scoped in conversation:
+
+- Public deployment
+- A data-sourcing pipeline: Wikidata/Wikipedia as the primary source for structured, attributable site facts, with Reddit as a secondary human/trend signal — combined in a scoring formula that deliberately avoids over-weighting virality. The `source_url`/`source_attribution` columns already exist on `sites` for this.
+
+Longer-term, not yet scoped:
 
 - Narrative story arcs by day
 - Transit-aware routing
