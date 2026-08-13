@@ -5,6 +5,7 @@ import type {
   BudgetSensitivity,
   FamiliarityLevel,
   CostCategory,
+  SiteSources,
 } from "./domain.ts";
 
 export interface GenerateItineraryRequestDto {
@@ -52,6 +53,7 @@ export interface SiteDetailDto {
   openingHoursNote?: string;
   closedDaysNote?: string;
   themes: ThemeSlug[];
+  sources?: SiteSources;
 }
 
 export interface GetSiteBySlugResponseDto {

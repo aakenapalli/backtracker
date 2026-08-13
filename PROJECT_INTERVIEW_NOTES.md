@@ -6,10 +6,11 @@ This file is a living record of product decisions, architectural choices, and im
 
 - **Backend**: Node/TypeScript, raw `node:http` (no framework). An 8-stage deterministic planner pipeline (`backend/src/planner/`). Postgres persistence via the raw `pg` driver and hand-written SQL migrations — no ORM.
 - **Frontend**: React/TypeScript, map-dominant UI built on `react-leaflet` with real OpenStreetMap/CARTO tiles. Talks to the real API — no mock data path in the running app.
-- **Data**: 27 Istanbul sites, 6 themes, 25 site relationships, version-controlled as TypeScript seed files and loaded into Postgres by a seed script.
-- **Tests**: 49 tests via Node's built-in `node:test` — 41 pure unit tests against in-memory fixtures, 8 integration tests against the real seeded database.
-- **Not yet built**: public deployment; the Wikidata/Wikipedia + Reddit data-sourcing pipeline (schema already reserves `source_url`/`source_attribution` columns for it); accounts/saved trips; transit-aware routing.
-- Single initial git commit as of 2026-08-13 — the project was built before being put under version control, so there's no earlier commit history to speak of.
+- **Data**: 27 Istanbul sites, 6 themes, 24 site relationships — hand-curated content, enriched with real sourced facts and interest/trend/social signals from Wikidata, Wikipedia, and Stack Exchange (`backend/src/ingest/`), combined in a scoring formula that keeps editorial judgment dominant over raw popularity.
+- **Tests**: 64 tests via Node's built-in `node:test` — pure unit tests against in-memory fixtures plus integration tests against the real seeded database.
+- **Live**: deployed publicly (Cloud Run + Firebase Hosting + Neon) — see README's "Live" section for URLs.
+- **Not yet built**: accounts/saved trips; transit-aware routing; site discovery beyond the curated 27 (the ingestion pipeline enriches existing sites, deliberately does not auto-add new ones — see the 2026-08-13 entries below for why).
+- Git history starts 2026-08-13 — the project was built before being put under version control, so there's no earlier commit history to speak of.
 
 See `README.md` for how to actually run it. The rest of this file is the "why" behind each of these — useful for going deeper in an interview than "it uses Postgres."
 
@@ -361,6 +362,36 @@ As implementation begins, keep appending:
 - Added a second guard to `db:seed` beyond the existing `NODE_ENV` check: it now refuses to run against any non-localhost `DATABASE_URL` unless `ALLOW_REMOTE_SEED=true` is explicitly set, closing the realistic accident of truncating production data from a laptop with a stray env var still exported.
 - Verification mirrored the Postgres migration's approach: diffed `npm run demo:backend` output against the same request made through the live Cloud Run URL — empty diff (after normalizing JSON formatting, which produced a false-positive diff on the first pass) confirmed the deployed code and Neon's seeded data are both correct, independent of anything UI-related.
 - Two planning passes were used for this, not one: the first Opus pass evaluated Vercel+Render+Neon in general; a second pass specifically re-targeted the runbook at Cloud Run + Firebase Hosting once GCP was chosen, since the deployment mechanics (container build/push, env var syntax, CORS origins) differ enough by platform to need their own accurate research rather than adapting the first plan by hand.
+
+### 2026-08-13 (continued) — Small fixes
+
+- Fixed the known Hagia Sophia/Topkapi duplicate reciprocal relationship (deliberately left in place during the Postgres migration to keep that migration's verification clean) — removed the redundant reverse entry, re-seeded both local and production databases.
+- Added GitHub Actions CI (`.github/workflows/test.yml`) running typecheck, frontend build, and the full test suite against a Postgres service container on every push/PR to `main` — passed on the first run.
+- Added a $1 GCP billing budget alert (`gcloud billing budgets create`) — purely a notification, doesn't cap spend, but converts "I think this is free" into "I'll know within a day if it isn't."
+
+### 2026-08-13 (continued) — Data sourcing pipeline: Wikidata + Wikipedia + Stack Exchange
+
+Two more Opus research/planning passes preceded implementation: one that called Wikidata/Wikipedia/Reddit/Stack Exchange live to verify current rate limits, auth requirements, and licensing before designing around them (general knowledge here would have been wrong — see below), and a second after the user chose to evaluate every decision through a "which reads better in an interview" lens specifically, not just engineering merit.
+
+**What shipped:**
+- 27 sites enriched with real Wikidata QIDs (hand-verified against coordinates, not fuzzy-searched — see `backend/src/ingest/qid-map.ts`'s comment for why fuzzy search is actively dangerous here), Wikipedia article links, and 24 months of English *and* Turkish pageview history (`backend/src/ingest/`).
+- A scoring formula (`backend/src/ingest/signal-scorer.ts`) that combines real interest/trend/social signals with the existing hand-curated `editorialPriority`, deliberately weighted so sourced signals (max ±20 points) can never outweigh editorial judgment (a 40-point spread) — enforced as an executable test (`site-scorer.test.ts`'s "editorial dominance invariant"), not just a paragraph of intent.
+- `npm run ingest:sync`: a build-time code generator, not a live sync into Postgres — writes two committed, git-reviewed TypeScript files that `db:seed` then loads normally. Production (Cloud Run) never calls any external API as a result — zero new secrets, zero new production failure modes.
+- Attribution surfaced through the real request path: `ItineraryStop.sources` → a "Source: Wikipedia ↗" link per stop in the UI, satisfying Wikimedia's own attribution terms (a hyperlink is sufficient) without ever storing Wikipedia's CC BY-SA prose — only CC0 facts (coordinates, dates) plus a link are shipped, so the app never crosses into ShareAlike territory at all.
+
+**Reddit was planned, then confirmed blocked, then replaced — a real-time finding, not a hypothetical.** The plan initially treated Reddit access as uncertain (its own docs were Cloudflare-blocked to automated research). The user then hit `reddit.com/prefs/apps` directly and got redirected to a manual "Responsible Builder Policy" approval form — self-service script-app registration is gone as of 2026, replaced by an application process third-party sources describe as slow and skewed toward commercial use. Verified this live with a follow-up web search once it happened, rather than treating it as settled from the original research. Swapped to the Stack Exchange Travel API instead (no auth, works today) — the provider interface (`social-provider.ts`-shaped) was designed to make this swap not touch `signal-scorer.ts` at all.
+
+**Verified empirically, not assumed, and it mattered:**
+- Wikipedia article titles move — Blue Mosque's English article moved from "Sultan Ahmed Mosque" to "Blue Mosque, Istanbul," and pageview counts split across both. Querying the wrong title silently undercounts by 6x with no error. Solved by always resolving the canonical title fresh rather than persisting one.
+- Real pageview data actively supports keeping `editorialPriority` rather than replacing it with popularity: Chora Church — one of the most historically significant Byzantine sites in the set — has fewer monthly Wikipedia views than the Balat neighborhood article. Popularity and historical value genuinely diverge in this project's own data, which is this project's whole thesis.
+- Stack Exchange's Travel community has very sparse content per individual Istanbul landmark — zero results for "Basilica Cistern" and "Dolmabahce Palace," two of the most famous sites in the set. Not treated as a failure: the scoring formula's breadth gate (fewer than 3 distinct posts caps the social score at 0.5) already handles sparse/zero data gracefully rather than needing a special case.
+- The Wikidata REST API's coordinate response nests under `value.content.latitude/longitude`, not `value.latitude/longitude` as initially assumed from the research summary — caught by testing the real response shape with `curl` before trusting the parsing code, not after.
+
+**Four decisions were evaluated specifically for resume/interview value, not just engineering merit** (three landed the same as the engineering-only recommendation, one flipped):
+- Build-time codegen over live sync — "I decoupled production from third-party API uptime" is a more specific, more senior-sounding answer than "I built a data pipeline."
+- Facts-only over shipping Wikipedia's prose — licensing awareness (CC0 vs. CC BY-SA) reads as maturity beyond coding ability.
+- Two typed tables over a generic EAV signals table — EAV is a well-known anti-pattern; "why would you do that" is as likely a reaction as being impressed.
+- **Flipped**: added Turkish Wikipedia pageviews to v1 rather than deferring to v2, specifically because the added cost was trivial (one more API call per site) and "I identified and corrected for English-language bias in interest data" is a distinctive, thematically-consistent story worth the small extra scope.
 
 ### Why This Order
 

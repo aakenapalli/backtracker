@@ -56,6 +56,11 @@ export function ItineraryPanel({ itinerary, activeDay, onDayChange }: ItineraryP
                   <span className={stop.required ? "required-badge" : "optional-badge"}>{stop.required ? "Essential stop" : "Optional detour"}</span>
                   <button>Why this stop? <span>→</span></button>
                 </div>
+                {stop.sources?.sourceUrl ? (
+                  <a className="stop-source" href={stop.sources.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    Source: Wikipedia <span>↗</span>
+                  </a>
+                ) : null}
               </div>
             </div>
           ))}

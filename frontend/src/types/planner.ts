@@ -42,6 +42,12 @@ export interface ItineraryStopView {
   closedDaysNote?: string;
   themes: ThemeSlug[];
   nearbyRelatedSiteSlugs: string[];
+  sources?: SiteSourcesView;
+}
+
+export interface SiteSourcesView {
+  sourceUrl?: string;
+  sourceAttribution?: string;
 }
 
 export interface DayPlanView {

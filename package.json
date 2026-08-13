@@ -13,6 +13,7 @@
     "db:psql": "docker compose exec postgres psql -U backtrack -d backtrack",
     "db:migrate": "node --env-file-if-exists=.env --experimental-strip-types backend/src/db/migrate.ts",
     "db:seed": "node --env-file-if-exists=.env --experimental-strip-types backend/src/db/seed.ts",
+    "ingest:sync": "node --env-file-if-exists=.env --experimental-strip-types backend/src/ingest/sync.ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview"

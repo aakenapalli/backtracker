@@ -110,6 +110,9 @@ button { color: inherit; }
 .optional-badge { color: var(--muted-dark); }
 .stop-footer button { border: 0; background: transparent; color: var(--text-dark); font-size: 10px; font-weight: 600; cursor: pointer; }
 .stop-footer button span { color: var(--accent); margin-left: 3px; }
+.stop-source { display: inline-block; margin-top: 8px; color: var(--muted-dark); font-size: 9px; text-decoration: none; }
+.stop-source:hover { color: var(--accent); }
+.stop-source span { margin-left: 2px; }
 
 .map-pane { position: relative; min-width: 0; }
 .map-pane-empty { background: var(--ink-soft); }

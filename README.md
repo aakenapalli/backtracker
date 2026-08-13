@@ -81,17 +81,24 @@ curl -X POST http://127.0.0.1:8787/api/itinerary/generate \
 | `npm run dev` | Start the frontend dev server | — |
 | `npm run build` | Type-check and build the frontend | — |
 | `npm run typecheck:backend` | Type-check the backend (not covered by `npm run build`) | — |
-| `npm test` | Run the test suite | yes, for 2 of 11 test files (see below) |
+| `npm run ingest:sync` | Fetch real Wikidata/Wikipedia/Stack Exchange data and generate `backend/src/seed/{sources,signals}.generated.ts` (dry-run by default; add `-- --write` to actually write files) | — |
+| `npm test` | Run the test suite | yes, for 2 of 12 test files (see below) |
 
 ## Testing
 
-The 9 planner/utility test files are pure unit tests against in-memory fixtures — no database needed. Only `itinerary.service.test.ts` and `site.repository.test.ts` hit the real database, so `npm test` requires `npm run db:up && npm run db:migrate && npm run db:seed` first. If the database isn't reachable, those two files fail fast with an actionable error instead of a bare connection error.
+10 of the 12 test files are pure unit tests against in-memory fixtures — no database needed. Only `itinerary.service.test.ts` and `site.repository.test.ts` hit the real database, so `npm test` requires `npm run db:up && npm run db:migrate && npm run db:seed` first. If the database isn't reachable, those two files fail fast with an actionable error instead of a bare connection error.
 
 ## Database
 
-Four tables: `themes`, `sites`, `site_themes` (join table with per-theme weight), `site_relationships` (directed edges between sites). `sites.slug` is a natural primary key — the whole app already addresses sites by slug.
+Six tables: `themes`, `sites`, `site_themes` (join table with per-theme weight), `site_relationships` (directed edges between sites), `site_pageview_months` (Wikipedia pageview history, English + Turkish), `site_social_snapshots` (Stack Exchange discussion signal). `sites.slug` is a natural primary key — the whole app already addresses sites by slug.
 
-Migrations live in `backend/src/db/migrations/` as numbered, forward-only SQL files (`0001_init.sql`, ...). They're immutable once applied — `npm run db:migrate` checksums each file and throws if an already-applied migration was edited, rather than a general down-migration system. To start over, `npm run db:reset`.
+Migrations live in `backend/src/db/migrations/` as numbered, forward-only SQL files (`0001_init.sql`, `0002_data_sourcing.sql`, ...). They're immutable once applied — `npm run db:migrate` checksums each file and throws if an already-applied migration was edited, rather than a general down-migration system. To start over, `npm run db:reset`.
+
+## Data sources and licensing
+
+Site facts are sourced from real external data, not just hand-typed: [Wikidata](https://www.wikidata.org/) (structured facts — coordinates, canonical identity) and [Wikipedia](https://www.wikipedia.org/) (pageview history, as a general-interest signal) via their official public APIs, plus [Stack Exchange's Travel community](https://travel.stackexchange.com/) as a human-discussion signal. Wikidata's structured data is [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain, no attribution required); Wikipedia's article *text* is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) — this app deliberately does not store or display Wikipedia's prose, only facts and a link to the source article, to stay entirely on the CC0 side of that line.
+
+`npm run ingest:sync` fetches this data and writes it to two generated, git-tracked files (`backend/src/seed/sources.generated.ts`, `signals.generated.ts`) — reviewed via a normal `git diff` before being committed, rather than written directly to the database. This means the deployed backend never depends on Wikidata/Wikipedia/Stack Exchange being reachable; those APIs are only ever called from a developer machine. See `PROJECT_INTERVIEW_NOTES.md` for the full design rationale, including the scoring formula that combines this sourced data with editorial judgment without letting popularity override curation.
 
 ## Live
 
@@ -102,4 +109,4 @@ Hosted on Google Cloud Run (backend), Firebase Hosting (frontend), and Neon (Pos
 
 ## Status
 
-Built and working end-to-end: the planner pipeline, the map-dominant frontend, Postgres persistence (27 seeded Istanbul sites, 6 themes, 25 relationships), and public deployment. 49 tests passing. Not yet done: a future data-sourcing pipeline (Wikidata/Wikipedia + Reddit) to source and attribute site data instead of hand-curating it. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.
+Built and working end-to-end: the planner pipeline, the map-dominant frontend, Postgres persistence (27 seeded Istanbul sites, 6 themes, 24 relationships), public deployment, and a real data-sourcing pipeline (Wikidata/Wikipedia/Stack Exchange) feeding a scoring formula that keeps editorial judgment dominant over raw popularity. 64 tests passing. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.

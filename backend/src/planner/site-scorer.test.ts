@@ -114,17 +114,70 @@ test("final score is the sum of all components", () => {
   assert.equal(scored.timePenalty, 0);
   assert.equal(scored.familiarityAdjustment, 0);
   assert.equal(scored.proximityScore, 4);
+  assert.equal(scored.sourcedInterestScore, 0);
+  assert.equal(scored.trendAdjustment, 0);
   assert.equal(
     scored.score,
     scored.themeScore +
       scored.significanceScore +
       scored.mustSeeBoost +
       scored.familiarityAdjustment +
-      scored.proximityScore -
+      scored.proximityScore +
+      scored.sourcedInterestScore +
+      scored.trendAdjustment -
       scored.budgetPenalty -
       scored.timePenalty,
   );
   assert.equal(scored.score, 1090);
+});
+
+test("sourcedInterestScore blends real interest and social signal, 70/30, scaled to 0..15", () => {
+  const noSources = scoreOne(makeSite(), makePreferences());
+  assert.equal(noSources.sourcedInterestScore, 0);
+
+  const fullySourced = scoreOne(
+    makeSite({ sources: { interestScore: 1, socialScore: 1 } }),
+    makePreferences(),
+  );
+  assert.equal(fullySourced.sourcedInterestScore, 15);
+
+  const interestOnly = scoreOne(makeSite({ sources: { interestScore: 1, socialScore: 0 } }), makePreferences());
+  assert.equal(interestOnly.sourcedInterestScore, 0.7 * 15);
+
+  const socialOnly = scoreOne(makeSite({ sources: { interestScore: 0, socialScore: 1 } }), makePreferences());
+  assert.equal(socialOnly.sourcedInterestScore, 0.3 * 15);
+});
+
+test("trendAdjustment scales the already-clamped trend score to +/-5", () => {
+  const noTrend = scoreOne(makeSite(), makePreferences());
+  assert.equal(noTrend.trendAdjustment, 0);
+
+  const trendingUp = scoreOne(makeSite({ sources: { trendScore: 1 } }), makePreferences());
+  assert.equal(trendingUp.trendAdjustment, 5);
+
+  const trendingDown = scoreOne(makeSite({ sources: { trendScore: -1 } }), makePreferences());
+  assert.equal(trendingDown.trendAdjustment, -5);
+});
+
+test("editorial dominance invariant: sourced signals can never outrank editorial judgment", () => {
+  // Maximum possible sourced signal (interest=1, social=1, trend=1) is
+  // (0.7*1 + 0.3*1)*15 + 1*5 = 20 points. editorialPriority's spread
+  // (significanceScore = editorialPriority * 10) is 40 points (10..50).
+  // A max-signal priority-1 site must never outscore a zero-signal
+  // priority-5 site with otherwise-identical inputs.
+  const maxSignalLowPriority = scoreOne(
+    makeSite({
+      editorialPriority: 1,
+      sources: { interestScore: 1, socialScore: 1, trendScore: 1 },
+    }),
+    makePreferences(),
+  );
+  const zeroSignalHighPriority = scoreOne(makeSite({ editorialPriority: 5 }), makePreferences());
+
+  assert.ok(
+    maxSignalLowPriority.score < zeroSignalHighPriority.score,
+    `max-signal low-priority site (${maxSignalLowPriority.score}) must score below a zero-signal high-priority site (${zeroSignalHighPriority.score})`,
+  );
 });
 
 type UserPreferencesBudget = "low" | "medium" | "high";

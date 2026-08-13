@@ -31,6 +31,7 @@ function toStop(site: Site, required: boolean): ItineraryStop {
     closedDaysNote: site.closedDaysNote,
     themes: site.themes.map((theme) => theme.slug),
     nearbyRelatedSiteSlugs,
+    sources: site.sources,
   };
 }
 

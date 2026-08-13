@@ -57,6 +57,34 @@ function getThemeScore(site: Site, preferences: UserPreferences): number {
     .reduce((sum, theme) => sum + theme.weight, 0);
 }
 
+/**
+ * Sourced interest, from real Wikipedia/Wikidata pageview data blended with
+ * Stack Exchange discussion volume (70/30 -- sustained encyclopedic interest
+ * weighted above sparser social-discussion signal). Both are already
+ * normalized to [0,1] against the sourced-site corpus at ingestion time
+ * (see backend/src/ingest/signal-scorer.ts); this just applies the blend
+ * and the resume-to-score-points multiplier. Sites with no sourced data
+ * (interestScore/socialScore both undefined) contribute 0, same as before
+ * this feature existed.
+ */
+function getSourcedInterestScore(site: Site): number {
+  const interest = site.sources?.interestScore ?? 0;
+  const social = site.sources?.socialScore ?? 0;
+  return (0.7 * interest + 0.3 * social) * 15;
+}
+
+/**
+ * Recent momentum (already clamped to [-1,1] at ingestion time -- see
+ * signal-scorer.ts's computeTrendScore, where a 100x viral spike and a
+ * modest doubling both clamp to the same +1 ceiling). +/-5 points here is
+ * deliberately small relative to editorialPriority's 10-50 point spread
+ * (see the "editorial dominance" invariant test in site-scorer.test.ts) --
+ * a trending site can nudge a ranking, never override curated judgment.
+ */
+function getTrendAdjustment(site: Site): number {
+  return (site.sources?.trendScore ?? 0) * 5;
+}
+
 export function scoreSites(sites: Site[], preferences: UserPreferences): ScoredSite[] {
   return sites.map((site) => {
     const themeScore = getThemeScore(site, preferences) * 40;
@@ -66,6 +94,8 @@ export function scoreSites(sites: Site[], preferences: UserPreferences): ScoredS
     const timePenalty = getTimePenalty(site, preferences);
     const familiarityAdjustment = getFamiliarityAdjustment(site, preferences);
     const proximityScore = getRelationshipScore(site, preferences);
+    const sourcedInterestScore = getSourcedInterestScore(site);
+    const trendAdjustment = getTrendAdjustment(site);
 
     return {
       site,
@@ -74,7 +104,9 @@ export function scoreSites(sites: Site[], preferences: UserPreferences): ScoredS
         significanceScore +
         mustSeeBoost +
         familiarityAdjustment +
-        proximityScore -
+        proximityScore +
+        sourcedInterestScore +
+        trendAdjustment -
         budgetPenalty -
         timePenalty,
       themeScore,
@@ -84,6 +116,8 @@ export function scoreSites(sites: Site[], preferences: UserPreferences): ScoredS
       timePenalty,
       familiarityAdjustment,
       proximityScore,
+      sourcedInterestScore,
+      trendAdjustment,
     };
   });
 }

@@ -9,4 +9,5 @@ coverage
 *.tsbuildinfo
 resume.md
 .firebase
+backend/src/ingest/.cache
 

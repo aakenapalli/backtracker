@@ -15,6 +15,8 @@ function makeScored(site: ReturnType<typeof makeSite>, score: number): ScoredSit
     timePenalty: 0,
     familiarityAdjustment: 0,
     proximityScore: 0,
+    sourcedInterestScore: 0,
+    trendAdjustment: 0,
   };
 }
 

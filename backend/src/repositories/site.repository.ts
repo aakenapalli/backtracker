@@ -8,6 +8,7 @@ import type {
   Site,
   SiteRelationship,
   SiteRelationshipType,
+  SiteSources,
   SiteTheme,
   ThemeSlug,
 } from "../types/domain.ts";
@@ -33,6 +34,15 @@ interface SiteRow {
   pace_intensity: string;
   familiarity_level_hint: string;
   editorial_priority: number;
+  wikidata_qid: string | null;
+  wikipedia_title: string | null;
+  source_url: string | null;
+  source_attribution: string | null;
+  source_license: string | null;
+  source_retrieved_at: Date | null;
+  interest_score: number | null;
+  trend_score: number | null;
+  social_score: number | null;
 }
 
 interface SiteThemeRow {
@@ -47,6 +57,24 @@ interface SiteRelationshipRow {
   relationship_type: string;
   strength: number;
   notes: string | null;
+}
+
+function toSources(row: SiteRow): SiteSources | undefined {
+  if (!row.wikidata_qid) {
+    return undefined;
+  }
+
+  return {
+    wikidataQid: row.wikidata_qid,
+    wikipediaTitle: row.wikipedia_title ?? undefined,
+    sourceUrl: row.source_url ?? undefined,
+    sourceAttribution: row.source_attribution ?? undefined,
+    sourceLicense: (row.source_license as SiteSources["sourceLicense"]) ?? undefined,
+    sourceRetrievedAt: row.source_retrieved_at?.toISOString() ?? undefined,
+    interestScore: row.interest_score ?? undefined,
+    trendScore: row.trend_score ?? undefined,
+    socialScore: row.social_score ?? undefined,
+  };
 }
 
 function toSite(row: SiteRow): Site {
@@ -73,6 +101,7 @@ function toSite(row: SiteRow): Site {
     editorialPriority: row.editorial_priority as 1 | 2 | 3 | 4 | 5,
     themes: [],
     relationships: [],
+    sources: toSources(row),
   };
 }
 

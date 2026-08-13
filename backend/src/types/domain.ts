@@ -65,6 +65,19 @@ export interface Site {
   editorialPriority: 1 | 2 | 3 | 4 | 5;
   themes: SiteTheme[];
   relationships?: SiteRelationship[];
+  sources?: SiteSources;
+}
+
+export interface SiteSources {
+  wikidataQid?: string;
+  wikipediaTitle?: string;
+  sourceUrl?: string;
+  sourceAttribution?: string;
+  sourceLicense?: "CC0-1.0" | "CC-BY-SA-4.0";
+  sourceRetrievedAt?: string;
+  interestScore?: number;
+  trendScore?: number;
+  socialScore?: number;
 }
 
 export interface UserPreferences {
@@ -88,6 +101,8 @@ export interface ScoredSite {
   timePenalty: number;
   familiarityAdjustment: number;
   proximityScore: number;
+  sourcedInterestScore: number;
+  trendAdjustment: number;
 }
 
 export interface TravelEstimate {
@@ -117,6 +132,7 @@ export interface ItineraryStop {
   closedDaysNote?: string;
   themes: ThemeSlug[];
   nearbyRelatedSiteSlugs: string[];
+  sources?: SiteSources;
 }
 
 export interface DayPlan {
