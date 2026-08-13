@@ -107,6 +107,10 @@ Site facts are sourced from real external data, not just hand-typed: [Wikidata](
 
 Hosted on Google Cloud Run (backend), Firebase Hosting (frontend), and Neon (Postgres) — $0/month at this traffic level, no keep-warm mechanism (Cloud Run's cold start is ~1-3s, low enough to just accept).
 
+## CI/CD
+
+Every push to `main` runs the full test suite, then — only if tests pass — deploys both the backend and frontend for real (`.github/workflows/test.yml`). Authentication uses Workload Identity Federation: GitHub gets a short-lived, repo-and-branch-scoped token per run, and there are no long-lived credentials or GitHub secrets anywhere (see `PROJECT_INTERVIEW_NOTES.md` for the reasoning and a real bug the setup process caught along the way). Manual deploys (`gcloud run deploy`, `firebase deploy`) still work unchanged as a fallback.
+
 ## Status
 
-Built and working end-to-end: the planner pipeline, the map-dominant frontend, Postgres persistence (27 seeded Istanbul sites, 6 themes, 24 relationships), public deployment, and a real data-sourcing pipeline (Wikidata/Wikipedia/Stack Exchange) feeding a scoring formula that keeps editorial judgment dominant over raw popularity. 64 tests passing. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.
+Built and working end-to-end: the planner pipeline, the map-dominant frontend, a real preferences wizard, Postgres persistence (27 seeded Istanbul sites, 6 themes, 24 relationships), public deployment with CI/CD auto-deploy on push, and a real data-sourcing pipeline (Wikidata/Wikipedia/Stack Exchange) feeding a scoring formula that keeps editorial judgment dominant over raw popularity. 64 tests passing. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.
