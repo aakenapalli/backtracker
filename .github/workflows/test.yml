@@ -96,7 +96,7 @@ jobs:
           # named-revision split that a plain deploy does not automatically
           # undo. Being explicit here means every future deploy re-asserts
           # the intended state regardless of the service's current mode.
-          revision_traffic: latest=100
+          revision_traffic: LATEST=100
           # env_vars is deliberately NOT set. Empty env_vars means the action
           # emits no env-related flag at all to `gcloud run deploy`, so the
           # existing DATABASE_URL / ALLOWED_ORIGINS / NODE_ENV on the service
