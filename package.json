@@ -1,0 +1,37 @@
+{
+  "name": "history-based-travel-planner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo:backend": "node --env-file-if-exists=.env --experimental-strip-types backend/src/demo.ts",
+    "dev:api": "node --env-file-if-exists=.env --experimental-strip-types backend/src/server.ts",
+    "test": "node --env-file-if-exists=.env --experimental-strip-types --test \"backend/src/**/*.test.ts\"",
+    "typecheck:backend": "tsc -p tsconfig.backend.json",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && npm run db:up && npm run db:migrate && npm run db:seed",
+    "db:psql": "docker compose exec postgres psql -U backtrack -d backtrack",
+    "db:migrate": "node --env-file-if-exists=.env --experimental-strip-types backend/src/db/migrate.ts",
+    "db:seed": "node --env-file-if-exists=.env --experimental-strip-types backend/src/db/seed.ts",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "pg": "^8.23.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-leaflet": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0"
+  }
+}

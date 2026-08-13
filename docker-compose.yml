@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: backtrack-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: backtrack
+      POSTGRES_PASSWORD: backtrack
+      POSTGRES_DB: backtrack
+    ports:
+      - "5433:5432"
+    volumes:
+      - backtrack-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backtrack -d backtrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  backtrack-pgdata:
