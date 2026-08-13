@@ -89,10 +89,31 @@ jobs:
           region: ${{ env.GCP_REGION }}
           project_id: ${{ env.GCP_PROJECT_ID }}
           source: .
+          # Explicit rather than relying on "deploys default to 100% traffic
+          # on the new revision": that default only holds while the service
+          # is in latest-following mode, and a prior --no-traffic/--tag
+          # deploy (used to verify this pipeline) switched it to a pinned
+          # named-revision split that a plain deploy does not automatically
+          # undo. Being explicit here means every future deploy re-asserts
+          # the intended state regardless of the service's current mode.
+          revision_traffic: latest=100
           # env_vars is deliberately NOT set. Empty env_vars means the action
           # emits no env-related flag at all to `gcloud run deploy`, so the
           # existing DATABASE_URL / ALLOWED_ORIGINS / NODE_ENV on the service
           # are preserved verbatim.
+
+      - name: Assert 100% traffic actually landed on the new revision
+        run: |
+          TRAFFIC=$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+            --format=json | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['status']['traffic']))")
+          echo "traffic=$TRAFFIC"
+          echo "$TRAFFIC" | python3 -c "
+          import sys, json
+          traffic = json.load(sys.stdin)
+          ok = any(t.get('latestRevision') and t.get('percent') == 100 for t in traffic)
+          sys.exit(0 if ok else 1)
+          " || { echo "::error::Deploy did not result in 100% traffic on the latest revision. The old revision may still be serving production."; exit 1; }
 
       - name: Assert ALLOWED_ORIGINS survived the deploy
         run: |
