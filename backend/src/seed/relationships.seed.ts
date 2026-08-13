@@ -34,12 +34,6 @@ export const relationshipSeeds: SiteRelationship[] = [
   },
   {
     fromSlug: "topkapi-palace",
-    toSlug: "hagia-sophia",
-    relationshipType: "paired-visit",
-    strength: 0.85,
-  },
-  {
-    fromSlug: "topkapi-palace",
     toSlug: "istanbul-archaeological-museums",
     relationshipType: "paired-visit",
     strength: 0.9,
