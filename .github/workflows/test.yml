@@ -89,10 +89,6 @@ jobs:
           region: ${{ env.GCP_REGION }}
           project_id: ${{ env.GCP_PROJECT_ID }}
           source: .
-          # DRY-RUN VERIFICATION PASS: creates a revision with zero production
-          # traffic. Remove this `flags:` line once verified, before relying
-          # on this workflow for real deploys.
-          flags: --no-traffic --tag=citest
           # env_vars is deliberately NOT set. Empty env_vars means the action
           # emits no env-related flag at all to `gcloud run deploy`, so the
           # existing DATABASE_URL / ALLOWED_ORIGINS / NODE_ENV on the service
