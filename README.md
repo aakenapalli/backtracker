@@ -93,6 +93,13 @@ Four tables: `themes`, `sites`, `site_themes` (join table with per-theme weight)
 
 Migrations live in `backend/src/db/migrations/` as numbered, forward-only SQL files (`0001_init.sql`, ...). They're immutable once applied — `npm run db:migrate` checksums each file and throws if an already-applied migration was edited, rather than a general down-migration system. To start over, `npm run db:reset`.
 
+## Live
+
+- **App**: https://backtrack-planner.web.app
+- **API**: https://backtrack-api-218665896593.us-east4.run.app
+
+Hosted on Google Cloud Run (backend), Firebase Hosting (frontend), and Neon (Postgres) — $0/month at this traffic level, no keep-warm mechanism (Cloud Run's cold start is ~1-3s, low enough to just accept).
+
 ## Status
 
-Built and working end-to-end: the planner pipeline, the map-dominant frontend, and Postgres persistence (27 seeded Istanbul sites, 6 themes, 25 relationships). 49 tests passing. Not yet done: public deployment, and a future data-sourcing pipeline (Wikidata/Wikipedia + Reddit) to source and attribute site data instead of hand-curating it. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.
+Built and working end-to-end: the planner pipeline, the map-dominant frontend, Postgres persistence (27 seeded Istanbul sites, 6 themes, 25 relationships), and public deployment. 49 tests passing. Not yet done: a future data-sourcing pipeline (Wikidata/Wikipedia + Reddit) to source and attribute site data instead of hand-curating it. See `PROJECT_INTERVIEW_NOTES.md` for the full "current state" summary and the reasoning behind each decision.

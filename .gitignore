@@ -8,4 +8,5 @@ build
 coverage
 *.tsbuildinfo
 resume.md
+.firebase
 
