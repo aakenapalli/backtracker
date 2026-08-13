@@ -1,0 +1,48 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: backtrack
+          POSTGRES_PASSWORD: backtrack
+          POSTGRES_DB: backtrack
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U backtrack -d backtrack"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://backtrack:backtrack@localhost:5432/backtrack
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run typecheck:backend
+
+      - run: npm run build
+
+      - run: npm run db:migrate
+
+      - run: npm run db:seed
+
+      - run: npm test
