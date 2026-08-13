@@ -1,4 +1,4 @@
-import type { DayPlan, ItineraryStop, Site, UserPreferences } from "../types/domain.ts";
+import type { DayPlan, ItineraryStop, ScoredSite, Site, UserPreferences } from "../types/domain.ts";
 import type { SiteCluster } from "./site-clusterer.ts";
 
 function toStop(site: Site, required: boolean): ItineraryStop {
@@ -42,6 +42,7 @@ function getStopMinutes(site: Site): number {
 export function allocateDays(
   clusters: SiteCluster[],
   preferences: UserPreferences,
+  allScoredSites: ScoredSite[] = [],
 ): DayPlan[] {
   const days: DayPlan[] = Array.from({ length: preferences.days }, (_, index) => ({
     dayNumber: index + 1,
@@ -90,6 +91,38 @@ export function allocateDays(
       usedSlugs.add(site.slug);
       targetDay.totalPlannedMinutes = targetDay.totalVisitMinutes + targetDay.totalTravelMinutes;
     }
+  }
+
+  // Clusters can leave some days far under capacity: a cluster's supportingSites
+  // are capped at 4 and picked from the same globally-scored pool as every other
+  // cluster, so a later, lower-scoring cluster can find most of its best
+  // supporting sites already claimed by an earlier one, starving its day. Top up
+  // any day that still has room from the full scored pool (not just cluster
+  // members), always retargeting the least-loaded day so what's left spreads
+  // evenly instead of piling onto whichever day filled first.
+  const leftovers = allScoredSites
+    .filter((entry) => !usedSlugs.has(entry.site.slug))
+    .sort((left, right) => right.score - left.score);
+
+  for (const entry of leftovers) {
+    const site = entry.site;
+    const isMustSee = preferences.mustSeeSlugs.includes(site.slug);
+
+    const targetDay = [...days]
+      .sort((left, right) => left.totalPlannedMinutes - right.totalPlannedMinutes)
+      .find(
+        (day) =>
+          isMustSee || day.totalPlannedMinutes + getStopMinutes(site) <= dailyCapacityMinutes * 0.95,
+      );
+
+    if (!targetDay) {
+      continue;
+    }
+
+    targetDay.stops.push(toStop(site, isMustSee));
+    targetDay.totalVisitMinutes += getStopMinutes(site);
+    usedSlugs.add(site.slug);
+    targetDay.totalPlannedMinutes = targetDay.totalVisitMinutes + targetDay.totalTravelMinutes;
   }
 
   return days;

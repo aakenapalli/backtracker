@@ -3,9 +3,26 @@ import assert from "node:assert/strict";
 import { allocateDays } from "./day-allocator.ts";
 import { makePreferences, makeSite } from "./test-fixtures.ts";
 import type { SiteCluster } from "./site-clusterer.ts";
+import type { ScoredSite } from "../types/domain.ts";
 
 function makeCluster(anchor: ReturnType<typeof makeSite>, supportingSites: ReturnType<typeof makeSite>[] = []): SiteCluster {
   return { anchor, supportingSites };
+}
+
+function makeScored(site: ReturnType<typeof makeSite>, score: number): ScoredSite {
+  return {
+    site,
+    score,
+    themeScore: 0,
+    significanceScore: 0,
+    mustSeeBoost: 0,
+    budgetPenalty: 0,
+    timePenalty: 0,
+    familiarityAdjustment: 0,
+    proximityScore: 0,
+    sourcedInterestScore: 0,
+    trendAdjustment: 0,
+  };
 }
 
 test("produces exactly preferences.days day plans", () => {
@@ -71,4 +88,64 @@ test("totalPlannedMinutes matches totalVisitMinutes before route optimization", 
   assert.equal(day.totalVisitMinutes, 95 + 60);
   assert.equal(day.totalTravelMinutes, 0);
   assert.equal(day.totalPlannedMinutes, day.totalVisitMinutes);
+});
+
+test("a leftover site not in any cluster tops up an under-capacity day", () => {
+  const anchor = makeSite({ slug: "anchor", estimatedVisitMinutes: 60, typicalWaitMinutes: 0 });
+  const leftover = makeSite({ slug: "leftover", estimatedVisitMinutes: 30, typicalWaitMinutes: 0 });
+  const preferences = makePreferences({ days: 1, hoursPerDay: 8, mustSeeSlugs: [] });
+
+  const [day] = allocateDays(
+    [makeCluster(anchor)],
+    preferences,
+    [makeScored(leftover, 5)],
+  );
+
+  assert.deepEqual(day.stops.map((stop) => stop.siteSlug).sort(), ["anchor", "leftover"]);
+});
+
+test("leftovers fill the least-loaded day first, highest score first", () => {
+  const anchorA = makeSite({ slug: "anchor-a", estimatedVisitMinutes: 60, typicalWaitMinutes: 0 });
+  const anchorB = makeSite({ slug: "anchor-b", estimatedVisitMinutes: 200, typicalWaitMinutes: 0 });
+  const leftoverLow = makeSite({ slug: "leftover-low", estimatedVisitMinutes: 30, typicalWaitMinutes: 0 });
+  const leftoverHigh = makeSite({ slug: "leftover-high", estimatedVisitMinutes: 30, typicalWaitMinutes: 0 });
+  const preferences = makePreferences({ days: 2, hoursPerDay: 8, mustSeeSlugs: [] });
+
+  const [dayA, dayB] = allocateDays(
+    [makeCluster(anchorA), makeCluster(anchorB)],
+    preferences,
+    [makeScored(leftoverLow, 1), makeScored(leftoverHigh, 10)],
+  );
+
+  assert.deepEqual(dayA.stops.map((stop) => stop.siteSlug), ["anchor-a", "leftover-high", "leftover-low"]);
+  assert.deepEqual(dayB.stops.map((stop) => stop.siteSlug), ["anchor-b"]);
+});
+
+test("a must-see leftover site is added even past the soft cap", () => {
+  const anchor = makeSite({ slug: "anchor", estimatedVisitMinutes: 460, typicalWaitMinutes: 0 });
+  const leftover = makeSite({ slug: "leftover", estimatedVisitMinutes: 30, typicalWaitMinutes: 0 });
+  const preferences = makePreferences({ days: 1, hoursPerDay: 8, mustSeeSlugs: ["leftover"] });
+
+  const [day] = allocateDays(
+    [makeCluster(anchor)],
+    preferences,
+    [makeScored(leftover, 5)],
+  );
+
+  assert.deepEqual(day.stops.map((stop) => stop.siteSlug).sort(), ["anchor", "leftover"]);
+});
+
+test("a leftover site already placed by a cluster is not duplicated", () => {
+  const anchor = makeSite({ slug: "anchor", estimatedVisitMinutes: 60, typicalWaitMinutes: 0 });
+  const shared = makeSite({ slug: "shared", estimatedVisitMinutes: 30, typicalWaitMinutes: 0 });
+  const preferences = makePreferences({ days: 1, hoursPerDay: 8, mustSeeSlugs: [] });
+
+  const [day] = allocateDays(
+    [makeCluster(anchor, [shared])],
+    preferences,
+    [makeScored(shared, 5)],
+  );
+
+  const occurrences = day.stops.filter((stop) => stop.siteSlug === "shared");
+  assert.equal(occurrences.length, 1);
 });

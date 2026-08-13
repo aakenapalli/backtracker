@@ -22,7 +22,7 @@ export class ItineraryService {
     const scoredSites = scoreSites(filteredSites, preferences);
     const anchors = selectAnchors(scoredSites, preferences);
     const clusters = buildClusters(anchors, scoredSites);
-    const days = allocateDays(clusters, preferences)
+    const days = allocateDays(clusters, preferences, scoredSites)
       .map(optimizeDayRoute)
       .map((day) => markOptionalStops(day, preferences))
       .filter((day) => day.stops.length > 0);
