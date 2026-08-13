@@ -1,10 +1,24 @@
-name: Test
+name: CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: backtrack-planner
+  GCP_REGION: us-east4
+  CLOUD_RUN_SERVICE: backtrack-api
+  FIREBASE_PROJECT_ID: backtrack-planner
+  # Cloud Run service URLs are stable for the life of the service. Deliberately
+  # not taken from the deploy job's `url` output: that output is `status.url`,
+  # which returns this service's legacy *.a.run.app hostname, not this one.
+  VITE_API_BASE_URL: https://backtrack-api-218665896593.us-east4.run.app
 
 jobs:
   test:
@@ -46,3 +60,106 @@ jobs:
       - run: npm run db:seed
 
       - run: npm test
+
+  deploy-backend:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: production-api
+      url: ${{ env.VITE_API_BASE_URL }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA_RUN }}
+
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ env.CLOUD_RUN_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          source: .
+          # DRY-RUN VERIFICATION PASS: creates a revision with zero production
+          # traffic. Remove this `flags:` line once verified, before relying
+          # on this workflow for real deploys.
+          flags: --no-traffic --tag=citest
+          # env_vars is deliberately NOT set. Empty env_vars means the action
+          # emits no env-related flag at all to `gcloud run deploy`, so the
+          # existing DATABASE_URL / ALLOWED_ORIGINS / NODE_ENV on the service
+          # are preserved verbatim.
+
+      - name: Assert ALLOWED_ORIGINS survived the deploy
+        run: |
+          ORIGINS=$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+            --format='value(spec.template.spec.containers[0].env.filter("name:ALLOWED_ORIGINS").extract(value))')
+          echo "ALLOWED_ORIGINS=$ORIGINS"
+          if [ -z "$ORIGINS" ]; then
+            echo "::error::ALLOWED_ORIGINS is empty after deploy - CORS config was wiped."
+            exit 1
+          fi
+
+      - name: Smoke test the deployed API
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 30 "$VITE_API_BASE_URL/api/health"; then
+              echo "healthy"; exit 0
+            fi
+            echo "attempt $i failed (cold start?), retrying..."; sleep 10
+          done
+          echo "::error::/api/health never returned success"; exit 1
+
+  deploy-frontend:
+    needs: [test, deploy-backend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: production-web
+      url: https://backtrack-planner.web.app
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
+
+      - name: Assert the API URL was actually inlined into the bundle
+        run: |
+          if ! grep -rq "$VITE_API_BASE_URL" dist/assets; then
+            echo "::error::VITE_API_BASE_URL was not inlined into the built bundle."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA_HOSTING }}
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          npm install -g firebase-tools@15
+          firebase deploy --only hosting \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive \
+            --message "${GITHUB_SHA::7} - ${GITHUB_REF_NAME}"
